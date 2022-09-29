@@ -96,14 +96,25 @@ int main(int argc, char *argv[]){
     setmemoryf<<<(uint)(ceilf((float)M / (float)num_thread) ), num_thread, 0, 0>>>(y, 0.0f, M);
     cudaDeviceSynchronize();
 
-    // compute
-    for(int i=0;i<10000;i++){
+    // compute and timing
+    struct timespec start, end;
+    timespec_get(&start, TIME_UTC);
+
+    int repeat = 100000;
+    for(int i=0;i<repeat;i++){
         compute<<<grid, num_thread, num_thread*sizeof(float), 0>>>(M, N, A, x, y );
         cudaDeviceSynchronize();
     }
 
+    timespec_get(&end, TIME_UTC);
+    time_t d_sec  = end.tv_sec  - start.tv_sec;
+    long   d_nsec = end.tv_nsec - start.tv_nsec;
+    double total_time = (double)d_sec + (double)d_nsec/1000000000.0;
+    printf("time=%f\n", total_time);
+    double perf = 
+
     // show result
-    result<<<1,1>>>(y,M);
+    //result<<<1,1>>>(y,M);
 
 
     // Free the memory on the device
