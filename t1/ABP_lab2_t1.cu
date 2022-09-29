@@ -32,7 +32,7 @@ int main(int argc, char *argv[]){
     // input parameter
     int M = 1024;
     int N = 512;
-    int num_thread = 1024;
+    int num_thread = 512;
     int num_block = (int)(ceilf((float)M*N / (float)num_thread))
     
     float *A, *x, *y;
