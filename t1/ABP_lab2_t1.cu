@@ -7,16 +7,17 @@
 #include <stdbool.h>
 #include <time.h>
 
- #define num_thread 512
+#define num_thread 512
 
 
-__device__ float reduction(float *sdata
+__global__ void result(float *y,
+                       uint count
                            )
 {
-    float sum = 0;
-    //atomicAdd(&sum, sdata[threadIdx.x]);
-    __syncthreads();
-    return sum;
+    for(int i=0;i<count;i++){
+        printf("i=%i, %f\n",i, y[i]);
+    }
+    
 }
 
 
@@ -37,10 +38,12 @@ __global__ void compute(uint   M,
     }
     __syncthreads();
 
-    atomicAdd(&sdata[num_thread], sdata[threadIdx.x]);
+    if(threadIdx.x != 0){
+        atomicAdd(&sdata[0], sdata[threadIdx.x]);
+    }
     __syncthreads();
     if(threadIdx.x == 0){
-        atomicAdd(&y[blockIdx.y], sdata[num_thread]);
+        atomicAdd(&y[blockIdx.y], sdata[0]);
     }
 }
 
@@ -55,6 +58,10 @@ __global__ void setmemoryf(float *A,
     if(idx<count){
         A[idx] = value;
     }
+    // if(threadIdx.x==0 && blockIdx.x==0){
+    // for(int i=0;i<count;i++){
+    //     printf("i=%i, %f\n",i, A[i]);
+    // }}
 }
 
 
@@ -65,12 +72,13 @@ int main(int argc, char *argv[]){
     // hardware parameter for A3000
     //const int num_SM = 32;
     //const int num_warp = 32;
+    // 4 warp schedulers.
 
     // input parameter
     uint M = 1024;
     uint N = 1024;
     //size_t num_thread = 512;
-    dim3 grid = ( (uint)(ceilf((float)N / (float)num_thread) ), M );
+    dim3 grid( (uint)(ceilf((float)N / (float)num_thread) ), M );
     
     float *A, *x, *y;
     // allocate memory on the device
@@ -85,15 +93,17 @@ int main(int argc, char *argv[]){
     //cudaMemset( y, 5, M);
     setmemoryf<<<(uint)(ceilf((float)M*N / (float)num_thread) ), num_thread, 0, 0>>>(A, 1.0f, M*N);
     setmemoryf<<<(uint)(ceilf((float)N / (float)num_thread) ), num_thread, 0, 0>>>(x, 3.0f, N);
-    setmemoryf<<<(uint)(ceilf((float)M / (float)num_thread) ), num_thread, 0, 0>>>(y, 5.0f, M);
+    setmemoryf<<<(uint)(ceilf((float)M / (float)num_thread) ), num_thread, 0, 0>>>(y, 0.0f, M);
     cudaDeviceSynchronize();
 
     // compute
-    compute<<<grid, num_thread, (num_thread+1)*sizeof(float), 0>>>(M, N, A, x, y );
-    cudaDeviceSynchronize();
+    for(int i=0;i<10000;i++){
+        compute<<<grid, num_thread, num_thread*sizeof(float), 0>>>(M, N, A, x, y );
+        cudaDeviceSynchronize();
+    }
 
     // show result
-    result<<<1,1>>>();
+    result<<<1,1>>>(y,M);
 
 
     // Free the memory on the device
