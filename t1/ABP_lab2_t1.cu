@@ -8,15 +8,28 @@
 #include <time.h>
 
 
-__global__ void compute(const int   M,
-                        const int   N,
-                        const float *x,
-                        const float *y,
-                        const float *z)
+__device__ float reduction(float *sdata
+                           )
+{
+    float sum = 0;
+    atomicAdd(&sum, sdata);
+    __syncthreads();
+    return sum;
+}
+
+
+
+
+__global__ void compute(uint   M,
+                        uint   N,
+                        float *x,
+                        float *y)
 {
     const int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    extern __shared__ float sdata[];
+
     if(idx < N){
-        z[idx] = a * x[idx] + y[idx];
+        sdata[threadIdx.x] = x[idx] * y[idx];
     }
 }
 
@@ -26,14 +39,14 @@ __global__ void compute(const int   M,
 int main(int argc, char *argv[]){
 
     // hardware parameter for A3000
-    const int num_SM = 32;
-    const int num_warp = 32;
+    //const int num_SM = 32;
+    //const int num_warp = 32;
 
     // input parameter
-    int M = 1024;
-    int N = 512;
-    int num_thread = 512;
-    int num_block = (int)(ceilf((float)M*N / (float)num_thread))
+    uint M = 1024;
+    uint N = 512;
+    size_t num_thread = 512;
+    dim3 num_block = ( (uint)(ceilf((float)N / (float)num_thread) ), M );
     
     float *A, *x, *y;
     // allocate memory on the device
@@ -48,7 +61,7 @@ int main(int argc, char *argv[]){
     cudaDeviceSynchronize();
 
     // compute
-    compute<<<num_block, num_thread>>>()
+    compute<<<num_block, num_thread, num_thread*sizeof(float), 0>>>(M, N, x, y );
 
 
     // Free the memory on the device
