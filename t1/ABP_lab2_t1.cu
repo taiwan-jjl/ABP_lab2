@@ -8,6 +8,7 @@
 #include <time.h>
 
 #define num_thread 512
+#define warp 32
 
 
 __global__ void result(float *y,
@@ -29,22 +30,32 @@ __global__ void compute(uint   M,
                         float *x,
                         float *y)
 {
-    extern __shared__ float sdata[];
-    const int idx = blockIdx.y * (int)N + blockIdx.x * blockDim.x + threadIdx.x;
-    const int idxx = threadIdx.x + blockIdx.x * blockDim.x;
+    __shared__ float sx[warp];
+    __shared__ float sy[warp];
+    if(threadIdx.x<32 && threadIdx.y==0){
+        sy[threadIdx.x]=0;
+    }
+               float temp=0;
 
-    if(idxx < N){
-        sdata[threadIdx.x] = A[idx] * x[idxx];
+    const int mat_x = blockIdx.x*blockDim.x + threadIdx.y;
+    const int mat_y = blockIdx.y*blockDim.y + threadIdx.x;
+    const int mat_idx = mat_x*(int)M + mat_y;
+
+    if(threadIdx.x<32 && threadIdx.y==0 && mat_x<(int)N && mat_y<(int)M){
+        sx[threadIdx.x] = x[mat_y];
     }
     __syncthreads();
 
-    if(threadIdx.x != 0){
-        atomicAdd(&sdata[0], sdata[threadIdx.x]);
+    if(mat_x<(int)N && mat_y<(int)M){
+        temp = A[mat_idx] * sx[threadIdx.y];
+        atomicAdd(&sy[threadIdx.x], temp);
     }
     __syncthreads();
-    if(threadIdx.x == 0){
-        atomicAdd(&y[blockIdx.y], sdata[0]);
+
+    if(threadIdx.x<32 && threadIdx.y==0){
+        atomicAdd(&y[mat_y], sy[threadIdx.x]);
     }
+    __syncthreads();
 }
 
 
@@ -70,15 +81,16 @@ __global__ void setmemoryf(float *A,
 int main(int argc, char *argv[]){
 
     // hardware parameter for A3000
-    //const int num_SM = 32;
-    //const int num_warp = 32;
+    // const int num_SM = 32;
+    // const int num_warp = 32;
     // 4 warp schedulers.
 
     // input parameter
-    uint M = 1024;
-    uint N = 1024;
+    uint M = 102;
+    uint N = 1025;
     //size_t num_thread = 512;
-    dim3 grid( (uint)(ceilf((float)N / (float)num_thread) ), M );
+    dim3 threadblock(warp, warp);
+    dim3 blockgrid( (uint)(ceilf((float)N / (float)warp) ), (uint)(ceilf((float)M / (float)warp) ) );
     
     float *A, *x, *y;
     // allocate memory on the device
@@ -100,9 +112,9 @@ int main(int argc, char *argv[]){
     struct timespec start, end;
     timespec_get(&start, TIME_UTC);
 
-    int repeat = 100000;
+    int repeat = 1;
     for(int i=0;i<repeat;i++){
-        compute<<<grid, num_thread, num_thread*sizeof(float), 0>>>(M, N, A, x, y );
+        compute<<<blockgrid, threadblock, 0, 0>>>(M, N, A, x, y );
         cudaDeviceSynchronize();
     }
 
@@ -111,10 +123,11 @@ int main(int argc, char *argv[]){
     long   d_nsec = end.tv_nsec - start.tv_nsec;
     double total_time = (double)d_sec + (double)d_nsec/1000000000.0;
     printf("time=%f\n", total_time);
-    double perf =   
+    double perf = 1.0e-9 * (double)(M*N + M + N) * 4.0 / total_time * (double)repeat;
+    printf("memory throughput = %f GByte/s\n", perf);
 
     // show result
-    //result<<<1,1>>>(y,M);
+    result<<<1,1>>>(y,M);
 
 
     // Free the memory on the device
