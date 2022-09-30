@@ -12,7 +12,7 @@
 
 
 __global__ void result(float *y,
-                       uint count
+                       int count
                            )
 {
     for(int i=0;i<count;i++){
@@ -24,8 +24,8 @@ __global__ void result(float *y,
 
 
 
-__global__ void compute(uint   M,
-                        uint   N,
+__global__ void compute(int    M,
+                        int    N,
                         float *A,
                         float *x,
                         float *y)
@@ -33,26 +33,26 @@ __global__ void compute(uint   M,
     __shared__ float sx[warp];
     __shared__ float sy[warp];
     if(threadIdx.x<32 && threadIdx.y==0){
-        sy[threadIdx.x]=0;
+        sy[threadIdx.x]=0.0f;
     }
-               float temp=0;
+               float temp=0.0f;
 
     const int mat_x = blockIdx.x*blockDim.x + threadIdx.y;
     const int mat_y = blockIdx.y*blockDim.y + threadIdx.x;
-    const int mat_idx = mat_x*(int)M + mat_y;
+    const int mat_idx = mat_x*M + mat_y;
 
-    if(threadIdx.x<32 && threadIdx.y==0 && mat_x<(int)N && mat_y<(int)M){
+    if(threadIdx.x<32 && threadIdx.y==0 && mat_x<N && mat_y<M){
         sx[threadIdx.x] = x[mat_y];
     }
     __syncthreads();
 
-    if(mat_x<(int)N && mat_y<(int)M){
+    if(mat_x<N && mat_y<M){
         temp = A[mat_idx] * sx[threadIdx.y];
         atomicAdd(&sy[threadIdx.x], temp);
     }
     __syncthreads();
 
-    if(threadIdx.x<32 && threadIdx.y==0){
+    if(threadIdx.x<32 && threadIdx.y==0 && mat_x<N && mat_y<M){
         atomicAdd(&y[mat_y], sy[threadIdx.x]);
     }
     __syncthreads();
@@ -63,7 +63,7 @@ __global__ void compute(uint   M,
 
 __global__ void setmemoryf(float *A,
                            float value, 
-                           size_t count)
+                           int   count)
 {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx<count){
@@ -86,11 +86,11 @@ int main(int argc, char *argv[]){
     // 4 warp schedulers.
 
     // input parameter
-    uint M = 102;
-    uint N = 1025;
+    int M = 63;
+    int N = 63;
     //size_t num_thread = 512;
     dim3 threadblock(warp, warp);
-    dim3 blockgrid( (uint)(ceilf((float)N / (float)warp) ), (uint)(ceilf((float)M / (float)warp) ) );
+    dim3 blockgrid( (unsigned int)(ceilf((float)N / (float)warp) ), (unsigned int)(ceilf((float)M / (float)warp) ) );
     
     float *A, *x, *y;
     // allocate memory on the device
@@ -103,16 +103,16 @@ int main(int argc, char *argv[]){
     //cudaMemset( A, 1, M*N);
     //cudaMemset( x, 3, N);
     //cudaMemset( y, 5, M);
-    setmemoryf<<<(uint)(ceilf((float)M*N / (float)num_thread) ), num_thread, 0, 0>>>(A, 1.0f, M*N);
-    setmemoryf<<<(uint)(ceilf((float)N / (float)num_thread) ), num_thread, 0, 0>>>(x, 3.0f, N);
-    setmemoryf<<<(uint)(ceilf((float)M / (float)num_thread) ), num_thread, 0, 0>>>(y, 0.0f, M);
+    setmemoryf<<<(unsigned int)(ceilf((float)M*N / (float)num_thread) ), num_thread, 0, 0>>>(A, 1.0f, M*N);
+    setmemoryf<<<(unsigned int)(ceilf((float)N / (float)num_thread) ), num_thread, 0, 0>>>(x, 3.0f, N);
+    setmemoryf<<<(unsigned int)(ceilf((float)M / (float)num_thread) ), num_thread, 0, 0>>>(y, 0.0f, M);
     cudaDeviceSynchronize();
 
     // compute and timing
     struct timespec start, end;
     timespec_get(&start, TIME_UTC);
 
-    int repeat = 1;
+    int repeat = 100;
     for(int i=0;i<repeat;i++){
         compute<<<blockgrid, threadblock, 0, 0>>>(M, N, A, x, y );
         cudaDeviceSynchronize();
