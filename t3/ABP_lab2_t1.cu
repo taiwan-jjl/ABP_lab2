@@ -37,23 +37,23 @@ __global__ void compute(int    M,
     }
                float temp=0.0f;
 
-    const int mat_x = blockIdx.y*blockDim.y + threadIdx.y;
-    const int mat_y = blockIdx.x*blockDim.x + threadIdx.x;
-    const int mat_idx = mat_x*M + mat_y;
+    const int mat_x = blockIdx.x*blockDim.x + threadIdx.x;
+    const int mat_y = blockIdx.y*blockDim.y + threadIdx.y;
+    const int mat_idx = mat_y*N + mat_x;
 
-    if(threadIdx.x==0 && mat_x<N){
-        sx[threadIdx.y] = x[mat_x];
+    if(threadIdx.y==0 && mat_x<N){
+        sx[threadIdx.x] = x[mat_x];
     }
     __syncthreads();
 
     if(mat_x<N && mat_y<M){
-        temp = A[mat_idx] * sx[threadIdx.y];
-        atomicAdd(&sy[threadIdx.x], temp);
+        temp = A[mat_idx] * sx[threadIdx.x];
+        atomicAdd(&sy[threadIdx.y], temp);
     }
     __syncthreads();
 
-    if(threadIdx.y==0 && mat_x<N && mat_y<M){
-        atomicAdd(&y[mat_y], sy[threadIdx.x]);
+    if(threadIdx.x==0 && mat_x<N && mat_y<M){
+        atomicAdd(&y[mat_y], sy[threadIdx.y]);
     }
     __syncthreads();
 
@@ -93,13 +93,13 @@ int main(int argc, char *argv[]){
 for(int test = 128; test<10000; test=test+32){
 
     int M = 10240;
-    int N = 10000;
+    int N = 10240;
 M=test;
 N=test;
 
     //size_t num_thread = 512;
     dim3 threadblock(warp, warp);
-    dim3 blockgrid( (unsigned int)(ceilf((float)M / (float)warp) ), (unsigned int)(ceilf((float)N / (float)warp) ) );
+    dim3 blockgrid( (unsigned int)(ceilf((float)N / (float)warp) ), (unsigned int)(ceilf((float)M / (float)warp) ) );
     
     float *A, *x, *y;
     // allocate memory on the device
