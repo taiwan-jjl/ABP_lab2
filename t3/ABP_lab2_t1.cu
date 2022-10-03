@@ -6,7 +6,6 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <time.h>
-#include "cublas_v2.h"
 
 #define num_thread 512
 #define warp 32
@@ -99,8 +98,8 @@ M=test;
 N=test;
 
     //size_t num_thread = 512;
-    //dim3 threadblock(warp, warp);
-    //dim3 blockgrid( (unsigned int)(ceilf((float)M / (float)warp) ), (unsigned int)(ceilf((float)N / (float)warp) ) );
+    dim3 threadblock(warp, warp);
+    dim3 blockgrid( (unsigned int)(ceilf((float)M / (float)warp) ), (unsigned int)(ceilf((float)N / (float)warp) ) );
     
     float *A, *x, *y;
     // allocate memory on the device
@@ -124,29 +123,8 @@ N=test;
 
     int repeat = 1000;
     for(int i=0;i<repeat;i++){
-
-        cublasHandle_t handle;
-        cublasStatus_t stat = cublasCreate(&handle);
-        if (stat != CUBLAS_STATUS_SUCCESS){
-            printf("CUBLAS initialization failed\n");
-            return 1;
-        }
-
-        const float alpha = 1.0f;
-        const float beta  = 0.0f;
-        stat =cublasSgemv(handle, CUBLAS_OP_T, 
-                          M, N, 
-                          &alpha, A, M, 
-                          x, 1, 
-                          &beta, 
-                          y, 1);
-
-        if(stat != CUBLAS_STATUS_SUCCESS){
-            printf("CUBLAS operation failed\n");
-            return 1;
-        }
-        
-        cublasDestroy(handle);
+        compute<<<blockgrid, threadblock, 0, 0>>>(M, N, A, x, y );
+        cudaDeviceSynchronize();
     }
 
     timespec_get(&end, TIME_UTC);
