@@ -1,0 +1,3 @@
+
+Jörn Zimmerling at Thu Oct 6, 2022 3:05pmat Thu Oct 6, 2022 3:05pm
+I added some comments for to the first part. You are reaching 9.4TFlop with cublas which is fine as A3000 is limited by 12.8 TFlop. Matrxi vector is memory limited so you need to make sure that memory access is optimal and coalessed. I think you accidentally confused the transpose with the non transpose. parralelizing over rows/columns only will give you better memory access.

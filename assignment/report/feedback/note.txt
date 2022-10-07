@@ -1,0 +1,6 @@
+I made a mistake about the timing.
+
+create the handle just once.
+only time the cublas function.
+device sync right after the cublas.
+repeat.
